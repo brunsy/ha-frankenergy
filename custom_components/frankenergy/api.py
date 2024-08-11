@@ -6,13 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from collections.abc import Mapping
 import json
-import secrets
-import hashlib
-import base64
-import uuid
 from urllib.parse import parse_qs
-import asyncio
-import http
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +24,7 @@ class FrankEnergyApi:
         """Initialise the API."""
         _LOGGER.warning("__init__")
         self._client_id = "9b63be56-54d0-4706-bfb5-69707d4f4f89"
-        self._redirect_uri = 'eol://oauth/redirect', 
+        self._redirect_uri = 'eol://oauth/redirect',
         self._url_token_base = "https://energyonlineb2cprod.b2clogin.com/energyonlineb2cprod.onmicrosoft.com"
         self._url_data_base = "https://mobile-api.energyonline.co.nz"
         self._p = "B2C_1A_signin"
@@ -56,7 +50,7 @@ class FrankEnergyApi:
     async def get_refresh_token(self):
         """Get the refresh token."""
         _LOGGER.debug("API get_refresh_token")
-        
+
         async with aiohttp.ClientSession() as session:
             url = f"{self._url_token_base}/oauth2/v2.0/authorize"
             scope = f'openid offline_access {self._client_id}'
@@ -76,7 +70,7 @@ class FrankEnergyApi:
             settings_json = self.get_setting_json(response_text)
             trans_id = settings_json.get("transId")
             csrf = settings_json.get("csrf")
-			
+
             url = f"{self._url_token_base}/{self._p}/SelfAsserted?tx={trans_id}&p={self._p}"
             payload = {
                 "request_type": "RESPONSE",

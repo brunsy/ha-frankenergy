@@ -2,8 +2,6 @@
 
 from datetime import datetime, timedelta
 import logging
-import json
-import pytz
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -92,7 +90,6 @@ class FrankEnergyUsageSensor(SensorEntity):
         response = await self._api.get_data()
         await self.process_data(response)
 
-        
     async def process_data(self, data):
       """Process the hourly energy data."""
       parsed_data = data
@@ -106,7 +103,7 @@ class FrankEnergyUsageSensor(SensorEntity):
       for entry in data['usage']:
           running_sum_kw += entry['kw']
           running_sum_costNZD += entry['costNZD']
-    
+
           cost_statistics.append(StatisticData({
               "start": datetime.strptime(entry['startDate'], "%Y-%m-%dT%H:%M:%S%z"),
               "sum": round(running_sum_costNZD, 2),
@@ -116,7 +113,7 @@ class FrankEnergyUsageSensor(SensorEntity):
               "start": datetime.strptime(entry['startDate'], "%Y-%m-%dT%H:%M:%S%z"),
               "sum": round(running_sum_kw, 2)
           }))
-          
+
       sensor_type = "energy_consumption_daily"
       if kw_statistics:
           kw_metadata = StatisticMetaData(
@@ -142,7 +139,7 @@ class FrankEnergyUsageSensor(SensorEntity):
                 statistic_id= f"{DOMAIN}:{sensor_type}",
                 unit_of_measurement= self._unit_of_measurement,
           )
-          
+
           _LOGGER.debug(f"Cost statistics: {cost_statistics}")
           async_add_external_statistics(self.hass, cost_metadata, cost_statistics)
       else:
