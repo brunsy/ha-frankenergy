@@ -1,0 +1,10 @@
+{
+	"name": "Frank Energy",
+	"country": [
+		"NZ"
+	],
+	"filename": "frank-energy.zip",
+	"hide_default_branch": true,
+	"render_readme": true,
+	"zip_release": true
+}

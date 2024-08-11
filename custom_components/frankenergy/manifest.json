@@ -1,0 +1,16 @@
+{
+	"domain": "frankenergy",
+	"name": "Frank Energy",
+	"codeowners": [
+		"@brunsy"
+	],
+	"config_flow": true,
+	"dependencies": [
+		"recorder"
+	],
+	"documentation": "https://github.com/brunsy/ha-frankenergy",
+	"iot_class": "cloud_polling",
+	"issue_tracker": "https://github.com/brunsy/ha-frankenergy/issues",
+	"requirements": [],
+	"version": "0.0.1"
+}
