@@ -2,13 +2,18 @@
 
 from datetime import datetime, timedelta
 import logging
+import pytz
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
-from homeassistant.components.recorder.statistics import async_add_external_statistics
+from homeassistant.components.recorder.util import get_instance
+from homeassistant.components.recorder.statistics import (
+    async_add_external_statistics,
+    get_last_statistics,
+)
 
 from .const import DOMAIN, SENSOR_NAME
 
@@ -40,9 +45,14 @@ class FrankEnergyUsageSensor(SensorEntity):
         self._unique_id = DOMAIN
         self._device_class = "energy"
         self._state_class = "total"
+        self._last_reset = None
         self._state_attributes = {}
         self._api = api
         self._icon = "mdi:meter-electric"
+        self._consumption_sensor_id =  f"{DOMAIN}:energy_consumption_daily"
+        self._consumption_sensor_name =  f"{DOMAIN} energy_consumption_daily"
+        self._cost_sensor_id =  f"{DOMAIN}:energy_cost_daily"
+        self._cost_sensor_name =  f"{DOMAIN} energy_cost_daily"
 
     @property
     def name(self):
@@ -57,7 +67,7 @@ class FrankEnergyUsageSensor(SensorEntity):
     @property
     def state(self):
         """Return the state of the device."""
-        return self._state
+        return None
 
     @property
     def extra_state_attributes(self):
@@ -75,6 +85,11 @@ class FrankEnergyUsageSensor(SensorEntity):
         return self._state_class
 
     @property
+    def last_reset(self):
+        """Return when the total accumulated energy usage was last reset to 0"""
+        return self._last_reset
+
+    @property
     def device_class(self):
         """Return the device class."""
         return self._device_class
@@ -88,56 +103,89 @@ class FrankEnergyUsageSensor(SensorEntity):
         """Update the sensor data."""
         _LOGGER.debug("Beginning sensor update")
         response = await self._api.get_data()
+        if not response:
+          _LOGGER.warning("No sensor data available, skipping processing")
+          return    
         await self.process_data(response)
 
     async def process_data(self, data):
       """Process the hourly energy data."""
-      parsed_data = data
-      _LOGGER.debug(f"Parsed data: {parsed_data}")
+      usageData = data.get('usage', [])
+      if not usageData:
+        _LOGGER.warning("No usage data available, skipping processing")
+        return    
+      
+      _LOGGER.debug(f"usage data: {usageData}")
       running_sum_kw = 0
       running_sum_costNZD = 0
 
       cost_statistics = []
       kw_statistics = []
+      first_start_date = datetime.fromisoformat(usageData[0]['startDate']).astimezone(pytz.utc)
 
-      for entry in data['usage']:
+      # Since last_reset doesn't seem to work, fetch the previous sum total to continue from
+      previous_consumption_sensor_data = await get_instance(self.hass).async_add_executor_job(
+          get_last_statistics, self.hass, 200, self._consumption_sensor_id, True, {"sum"}
+      )
+      previous_consumption_stats = previous_consumption_sensor_data.get(self._consumption_sensor_id, [])
+      
+      previous_cost_stats_sensor_data = await get_instance(self.hass).async_add_executor_job(
+          get_last_statistics, self.hass, 200, self._cost_sensor_id, True, {"sum"}
+      )
+      previous_cost_stats =previous_cost_stats_sensor_data.get(self._cost_sensor_id, [])
+      
+      for stat in previous_consumption_stats:
+        statStartDate = datetime.fromtimestamp(stat['start']).astimezone(pytz.utc)
+        if statStartDate < first_start_date and stat["sum"] is not None:
+            running_sum_kw = stat["sum"]
+            break
+      for stat in previous_cost_stats:
+        statStartDate = datetime.fromtimestamp(stat['start']).astimezone(pytz.utc)
+        if statStartDate < first_start_date and stat["sum"] is not None: 
+            running_sum_costNZD = stat["sum"]
+            break
+
+      _LOGGER.debug(f"previous running sum for consumption: {running_sum_kw}")
+      _LOGGER.debug(f"previous running sum for cost: {running_sum_costNZD}")
+                  
+      for entry in usageData:
           running_sum_kw += entry['kw']
           running_sum_costNZD += entry['costNZD']
 
           cost_statistics.append(StatisticData({
               "start": datetime.strptime(entry['startDate'], "%Y-%m-%dT%H:%M:%S%z"),
+              "state": entry['costNZD'],
               "sum": round(running_sum_costNZD, 2),
           }))
 
           kw_statistics.append(StatisticData({
               "start": datetime.strptime(entry['startDate'], "%Y-%m-%dT%H:%M:%S%z"),
+              "state": entry['kw'],
               "sum": round(running_sum_kw, 2)
           }))
 
-      sensor_type = "energy_consumption_daily"
       if kw_statistics:
           kw_metadata = StatisticMetaData(
               has_mean= False,
               has_sum= True,
-              name= f"{DOMAIN} {sensor_type}",
-                source= DOMAIN,
-                statistic_id= f"{DOMAIN}:{sensor_type}",
-                unit_of_measurement= self._unit_of_measurement,
+              name= self._consumption_sensor_name,
+              source= DOMAIN,
+              statistic_id= self._consumption_sensor_id,
+              unit_of_measurement= self._unit_of_measurement,
           )
           _LOGGER.debug(f"kw statistics: {kw_statistics}")
           async_add_external_statistics(self.hass, kw_metadata, kw_statistics)
       else:
           _LOGGER.warning("No daily energy consumption statistics found, skipping update")
 
-      sensor_type = "energy_cost_daily"
       if kw_statistics:
           cost_metadata = StatisticMetaData(
               has_mean= False,
               has_sum= True,
-              name= f"{DOMAIN} {sensor_type}",
-                source= DOMAIN,
-                statistic_id= f"{DOMAIN}:{sensor_type}",
-                unit_of_measurement= self._unit_of_measurement,
+              name= self._cost_sensor_name,
+              source= DOMAIN,
+              statistic_id= self._cost_sensor_id,
+              unit_of_measurement= self._unit_of_measurement,
           )
 
           _LOGGER.debug(f"Cost statistics: {cost_statistics}")
