@@ -157,7 +157,7 @@ class FrankEnergyApi:
             self._refresh_token = refresh_token
             self._refresh_token_expires_in = refresh_token_expires_in
             self._access_token_expires_in = access_token_expires_in
-            _LOGGER.debug(f"Refresh token retrieved successfully")
+            _LOGGER.debug("Refresh token retrieved successfully")
 
     async def get_api_token(self):
         """Get token from the Frank Energy API."""

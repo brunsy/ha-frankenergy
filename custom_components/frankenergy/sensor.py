@@ -86,7 +86,7 @@ class FrankEnergyUsageSensor(SensorEntity):
 
     @property
     def last_reset(self):
-        """Return when the total accumulated energy usage was last reset to 0"""
+        """Return when the total accumulated energy usage was last reset to 0."""
         return self._last_reset
 
     @property
@@ -105,7 +105,7 @@ class FrankEnergyUsageSensor(SensorEntity):
         response = await self._api.get_data()
         if not response:
           _LOGGER.warning("No sensor data available, skipping processing")
-          return    
+          return
         await self.process_data(response)
 
     async def process_data(self, data):
@@ -113,8 +113,8 @@ class FrankEnergyUsageSensor(SensorEntity):
       usageData = data.get('usage', [])
       if not usageData:
         _LOGGER.warning("No usage data available, skipping processing")
-        return    
-      
+        return
+
       _LOGGER.debug(f"usage data: {usageData}")
       running_sum_kw = 0
       running_sum_costNZD = 0
@@ -128,12 +128,12 @@ class FrankEnergyUsageSensor(SensorEntity):
           get_last_statistics, self.hass, 200, self._consumption_sensor_id, True, {"sum"}
       )
       previous_consumption_stats = previous_consumption_sensor_data.get(self._consumption_sensor_id, [])
-      
+
       previous_cost_stats_sensor_data = await get_instance(self.hass).async_add_executor_job(
           get_last_statistics, self.hass, 200, self._cost_sensor_id, True, {"sum"}
       )
       previous_cost_stats =previous_cost_stats_sensor_data.get(self._cost_sensor_id, [])
-      
+
       for stat in previous_consumption_stats:
         statStartDate = datetime.fromtimestamp(stat['start']).astimezone(pytz.utc)
         if statStartDate < first_start_date and stat["sum"] is not None:
@@ -141,13 +141,13 @@ class FrankEnergyUsageSensor(SensorEntity):
             break
       for stat in previous_cost_stats:
         statStartDate = datetime.fromtimestamp(stat['start']).astimezone(pytz.utc)
-        if statStartDate < first_start_date and stat["sum"] is not None: 
+        if statStartDate < first_start_date and stat["sum"] is not None:
             running_sum_costNZD = stat["sum"]
             break
 
       _LOGGER.debug(f"previous running sum for consumption: {running_sum_kw}")
       _LOGGER.debug(f"previous running sum for cost: {running_sum_costNZD}")
-                  
+
       for entry in usageData:
           running_sum_kw += entry['kw']
           running_sum_costNZD += entry['costNZD']
