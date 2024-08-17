@@ -199,15 +199,16 @@ class FrankEnergyApi:
             "mobile-build-number": "1"
         }
 
-        today = datetime.now()
-        seven_days_ago = today - timedelta(days=7) # fetch 7 days worth of data
-        from_date = seven_days_ago.strftime("%Y-%m-%d")
-        to_date = today.strftime("%Y-%m-%d")
+        # API only returns 120 usage items (starting from the from_date).
+        # If you want to query more than ~4 days of hourly data, at a time you need to split it into multiple requests
+        # or the the latest usage will not be returned.
+        to_date = datetime.now()
+        from_date = to_date - timedelta(days=4) # fetch 4 days worth of data
 
         url = f"{self._url_data_base}/v2/private/usage/electricity/aggregatedSiteUsage/hourly"
         params = {
-            'startDate': from_date,
-            'endDate': to_date,
+            'startDate': from_date.strftime("%Y-%m-%d"),
+            'endDate': to_date.strftime("%Y-%m-%d"),
         }
 
         async with aiohttp.ClientSession() as session, \

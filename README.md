@@ -4,7 +4,9 @@ View your energy usage from Frank Energy (NZ) in homeassistant.
 
 ## Data
 
-Imports the last week of hourly energy data & costs from Frank Energy.
+Imports the last few days of hourly energy data & costs from Frank Energy.
+
+![Energy Useage PNG](/homeassistant-energy-graph.png "Energy Dashboard Reporting")
 
 ## Getting started
 
