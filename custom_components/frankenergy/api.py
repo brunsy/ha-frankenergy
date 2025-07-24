@@ -172,9 +172,18 @@ class FrankEnergyApi:
                 else:
                     _LOGGER.error("Failed to retrieve the token page.")
 
-    async def get_data(self):
-        """Get data from the API."""
+    async def get_data(self, start_date: datetime = None, end_date: datetime = None):
+        """Get data from the API. Defaults to last 4 days if no dates given.
+        Splits requests in 5-day chunks if date range > 5 days.
+        Returns combined dict with 'usage' key containing list of usage entries."""
 
+        if start_date is None:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=4)
+        elif end_date is None:
+            end_date = datetime.now()
+
+        # Renew tokens if needed
         access_token_threshold = timedelta(minutes=5).total_seconds()
         if self._access_token_expires_in <= access_token_threshold:
             _LOGGER.warning("Access token needs renewing")
@@ -192,23 +201,35 @@ class FrankEnergyApi:
             "mobile-build-number": "1"
         }
 
-        to_date = datetime.now()
-        from_date = to_date - timedelta(days=4)
+        combined_usage = []
 
-        url = f"{self._url_data_base}/v2/private/usage/electricity/aggregatedSiteUsage/hourly"
-        params = {
-            'startDate': from_date.strftime("%Y-%m-%d"),
-            'endDate': to_date.strftime("%Y-%m-%d"),
-        }
+        chunk_size_days = 5
+        current_start = start_date
 
         jar = aiohttp.CookieJar(quote_cookie=False)
         async with aiohttp.ClientSession(cookie_jar=jar) as session:
-            async with session.get(url, headers=headers, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if not data:
-                        _LOGGER.warning("Fetched consumption successfully but there was no data")
-                    return data
-                else:
-                    _LOGGER.error("Could not fetch consumption")
-                    return None
+            while current_start < end_date:
+                current_end = min(current_start + timedelta(days=chunk_size_days), end_date)
+
+                url = f"{self._url_data_base}/v2/private/usage/electricity/aggregatedSiteUsage/hourly"
+                params = {
+                    'startDate': current_start.strftime("%Y-%m-%d"),
+                    'endDate': current_end.strftime("%Y-%m-%d"),
+                }
+
+                _LOGGER.debug(f"Fetching data chunk: {params['startDate']} to {params['endDate']}")
+
+                async with session.get(url, headers=headers, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        usage_chunk = data.get('usage', [])
+                        if usage_chunk:
+                            combined_usage.extend(usage_chunk)
+                        else:
+                            _LOGGER.warning(f"No usage data in chunk {params['startDate']} to {params['endDate']}")
+                    else:
+                        _LOGGER.error(f"Failed to fetch data chunk {params['startDate']} to {params['endDate']}")
+
+                current_start = current_end + timedelta(seconds=1)
+
+        return {"usage": combined_usage}
